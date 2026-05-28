@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>출장용 PC 장비 관리 시스템</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.x/dist/tabler-icons.min.css">
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+    import { getDatabase, ref, onValue, set, get } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-database.js";
+
+    // =============================================
+    // 🔧 Firebase 설정 (firebase-config.js 참고)
+    // =============================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyDyDZMQfoOaftonqw_1-76BVpuRkcyPE3g",
+      authDomain: "pc-reservaion-system.firebaseapp.com",
+      databaseURL: "https://pc-reservaion-system-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "pc-reservaion-system",
+      storageBucket: "pc-reservaion-system.firebasestorage.app",
+      messagingSenderId: "671968009289",
+      appId: "1:671968009289:web:41561827592540aa83f398"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // Firebase 저장
+    window.fbSave = async (data) => {
+      await set(ref(db, 'reservations'), data);
+    };
+
+    // Firebase 실시간 수신
+    window.fbListen = (callback) => {
+      onValue(ref(db, 'reservations'), (snapshot) => {
+        callback(snapshot.val() || []);
+      });
+    };
+
+    window.firebaseReady = true;
+    document.dispatchEvent(new Event('firebase-ready'));
+  </script>
+
+  <style>
+    :root {
+      --color-bg: #ffffff;
+      --color-bg-secondary: #f5f5f5;
+      --color-bg-tertiary: #ebebeb;
+      --color-text: #1a1a1a;
+      --color-text-secondary: #666666;
+      --color-text-tertiary: #999999;
+      --color-border: #e0e0e0;
+      --color-border-light: #f0f0f0;
+      --color-accent: #1a1a1a;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Malgun Gothic', sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-bg: #1a1a1a;
+        --color-bg-secondary: #242424;
+        --color-bg-tertiary: #2e2e2e;
+        --color-text: #f0f0f0;
+        --color-text-secondary: #aaaaaa;
+        --color-text-tertiary: #777777;
+        --color-border: #3a3a3a;
+        --color-border-light: #2e2e2e;
+        --color-accent: #f0f0f0;
+      }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font); background: var(--color-bg); color: var(--color-text); font-size: 14px; }
+    a { color: inherit; }
+    input, select, textarea, button { font-family: var(--font); font-size: 14px; color: var(--color-text); }
+    input, select, textarea {
+      background: var(--color-bg);
+      border: 0.5px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 8px 10px;
+      width: 100%;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--color-accent); }
+    textarea { resize: vertical; min-height: 60px; }
+
+    /* Layout */
+    .wrap { max-width: 780px; margin: 0 auto; padding: 24px 16px 60px; }
+    .header { margin-bottom: 24px; }
+    .header h1 { font-size: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .header p { font-size: 13px; color: var(--color-text-secondary); margin-top: 4px; }
+
+    /* Status bar */
+    .status-bar { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-secondary); margin-bottom: 20px; padding: 8px 12px; background: var(--color-bg-secondary); border-radius: var(--radius-md); }
+    .status-dot-live { width: 7px; height: 7px; border-radius: 50%; background: #639922; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .status-dot-off { width: 7px; height: 7px; border-radius: 50%; background: #aaa; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 2px; border-bottom: 0.5px solid var(--color-border); margin-bottom: 20px; overflow-x: auto; }
+    .tab { padding: 8px 16px; font-size: 14px; color: var(--color-text-secondary); border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; transition: all 0.15s; }
+    .tab.active { color: var(--color-text); border-bottom-color: var(--color-text); font-weight: 500; }
+    .tab:hover:not(.active) { color: var(--color-text); }
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* Card */
+    .card { background: var(--color-bg); border: 0.5px solid var(--color-border); border-radius: var(--radius-lg); padding: 16px 20px; margin-bottom: 12px; }
+
+    /* Form */
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; font-weight: 500; }
+    .date-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .section-label { font-size: 11px; font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.06em; margin: 16px 0 8px; }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 16px; border-radius: var(--radius-md); font-size: 14px; cursor: pointer; border: none; transition: all 0.15s; font-weight: 500; }
+    .btn-block { width: 100%; }
+    .btn-primary { background: var(--color-accent); color: var(--color-bg); }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-secondary { background: var(--color-bg); color: var(--color-text); border: 0.5px solid var(--color-border); }
+    .btn-secondary:hover { background: var(--color-bg-secondary); }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+    .btn-danger { border-color: #E24B4A; color: #A32D2D; background: var(--color-bg); }
+    .btn-success { border-color: #639922; color: #3B6D11; background: var(--color-bg); }
+
+    /* Badge */
+    .badge { display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 500; }
+    .badge-success { background: #EAF3DE; color: #3B6D11; }
+    .badge-warning { background: #FAEEDA; color: #854F0B; }
+    .badge-danger { background: #FCEBEB; color: #A32D2D; }
+    .badge-info { background: #E6F1FB; color: #185FA5; }
+    .badge-gray { background: var(--color-bg-secondary); color: var(--color-text-secondary); }
+
+    /* Status dot */
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot-avail { background: #639922; }
+    .dot-busy { background: #E24B4A; }
+
+    /* Alert */
+    .alert { padding: 10px 12px; border-radius: var(--radius-md); font-size: 13px; margin-bottom: 12px; }
+    .alert-success { background: #EAF3DE; color: #3B6D11; border: 0.5px solid #C0DD97; }
+    .alert-danger { background: #FCEBEB; color: #A32D2D; border: 0.5px solid #F7C1C1; }
+
+    /* Notice */
+    .notice { background: #FAEEDA; border: 0.5px solid #FAC775; border-radius: var(--radius-md); padding: 8px 12px; font-size: 12px; color: #854F0B; margin-bottom: 12px; line-height: 1.5; }
+
+    /* Equipment groups (reserve tab) */
+    .equip-group { margin-bottom: 10px; }
+    .equip-group-header { display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: var(--color-bg-secondary); border-radius: var(--radius-md); cursor: pointer; user-select: none; }
+    .equip-group-header-info { flex: 1; min-width: 0; }
+    .equip-group-title { font-size: 13px; font-weight: 500; }
+    .equip-group-parts-text { font-size: 11px; color: var(--color-text-secondary); margin-top: 1px; }
+    .equip-group-body { display: none; padding: 4px 0; }
+    .equip-group-body.open { display: block; }
+    .equip-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--radius-md); }
+    .equip-item:hover { background: var(--color-bg-secondary); }
+    .equip-item input[type=checkbox] { width: 16px; height: 16px; flex-shrink: 0; cursor: pointer; accent-color: var(--color-accent); }
+    .equip-item-label { flex: 1; cursor: pointer; }
+    .equip-item-name { font-size: 13px; display: block; }
+    .equip-item-sub { font-size: 11px; color: var(--color-text-secondary); display: block; margin-top: 1px; }
+
+    /* Selected summary */
+    .selected-summary { background: var(--color-bg-secondary); border-radius: var(--radius-md); padding: 8px 12px; margin-top: 10px; min-height: 38px; font-size: 13px; }
+    .selected-tag { display: inline-flex; align-items: center; gap: 4px; background: var(--color-bg); border: 0.5px solid var(--color-border); border-radius: var(--radius-sm); padding: 3px 8px; font-size: 12px; margin: 2px; }
+
+    /* Inventory */
+    .inv-group { margin-bottom: 20px; }
+    .inv-group-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; margin-bottom: 4px; flex-wrap: wrap; }
+    .inv-group-parts { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 8px; }
+    .inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 6px; }
+    .inv-chip { padding: 6px 10px; border-radius: var(--radius-md); border: 0.5px solid var(--color-border); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+    .inv-chip.busy { background: var(--color-bg-secondary); color: var(--color-text-secondary); }
+
+    /* Manage */
+    .filter-row { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+    .filter-btn { padding: 5px 12px; font-size: 12px; border: 0.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg); color: var(--color-text-secondary); cursor: pointer; }
+    .filter-btn.active { background: var(--color-accent); color: var(--color-bg); border-color: var(--color-accent); }
+    .reservation-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 0.5px solid var(--color-border-light); }
+    .reservation-row:last-child { border-bottom: none; }
+    .res-info { flex: 1; min-width: 0; }
+    .res-name { font-size: 14px; font-weight: 500; }
+    .res-meta { font-size: 12px; color: var(--color-text-secondary); margin-top: 2px; }
+    .res-actions { display: flex; flex-direction: column; gap: 5px; align-items: flex-end; flex-shrink: 0; }
+    .empty-state { text-align: center; padding: 2.5rem; color: var(--color-text-secondary); font-size: 14px; }
+
+    /* Modal */
+    .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 200; padding: 16px; }
+    .modal { background: var(--color-bg); border-radius: var(--radius-lg); border: 0.5px solid var(--color-border); padding: 24px; width: 100%; max-width: 500px; max-height: 88vh; overflow-y: auto; }
+    .modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 6px; }
+    .modal-footer { display: flex; gap: 8px; margin-top: 16px; }
+    .detail-box { background: var(--color-bg-secondary); border-radius: var(--radius-md); padding: 10px 14px; margin-bottom: 14px; }
+    .detail-row { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; gap: 8px; }
+    .detail-label { color: var(--color-text-secondary); flex-shrink: 0; }
+    .detail-value { font-weight: 500; text-align: right; }
+
+    /* Checklist */
+    .cl-group { margin-bottom: 14px; }
+    .cl-group-title { font-size: 11px; font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.05em; padding-bottom: 5px; border-bottom: 0.5px solid var(--color-border); margin-bottom: 6px; }
+    .cl-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 0.5px solid var(--color-border-light); }
+    .cl-item:last-child { border-bottom: none; }
+    .cl-item input[type=checkbox] { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; cursor: pointer; accent-color: var(--color-accent); }
+    .cl-item label { font-size: 13px; cursor: pointer; line-height: 1.5; }
+    .cl-item.checked label { color: var(--color-text-tertiary); text-decoration: line-through; }
+    .progress-wrap { height: 4px; background: var(--color-bg-tertiary); border-radius: 2px; margin: 10px 0 4px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #639922; border-radius: 2px; transition: width 0.3s; }
+    .progress-text { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 14px; }
+
+    /* Export */
+    .stat-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 16px; }
+    .stat-chip { background: var(--color-bg-secondary); border-radius: var(--radius-md); padding: 12px; text-align: center; }
+    .stat-num { font-size: 24px; font-weight: 600; }
+    .stat-label { font-size: 11px; color: var(--color-text-secondary); margin-top: 2px; }
+    .export-card { border: 0.5px solid var(--color-border); border-radius: var(--radius-lg); padding: 14px 16px; margin-bottom: 10px; display: flex; gap: 14px; }
+    .export-icon { width: 40px; height: 40px; border-radius: var(--radius-md); background: var(--color-bg-secondary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .export-title { font-size: 14px; font-weight: 500; margin-bottom: 3px; }
+    .export-desc { font-size: 12px; color: var(--color-text-secondary); line-height: 1.5; }
+    .export-info { background: var(--color-bg-secondary); border-radius: var(--radius-md); padding: 10px 14px; margin-bottom: 14px; font-size: 13px; color: var(--color-text-secondary); line-height: 1.6; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1><i class="ti ti-device-laptop"></i>출장용 PC 장비 관리 시스템</h1>
+    <p>장비 예약 · 불출 · 반납을 한 곳에서 관리합니다</p>
+  </div>
+
+  <div class="status-bar" id="status-bar">
+    <span class="status-dot-off" id="status-dot"></span>
+    <span id="status-text">Firebase 연결 중...</span>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('inventory',this)"><i class="ti ti-package"></i> 장비 현황</button>
+    <button class="tab" onclick="switchTab('reserve',this)"><i class="ti ti-calendar-plus"></i> 예약하기</button>
+    <button class="tab" onclick="switchTab('manage',this)"><i class="ti ti-list-check"></i> 예약 관리</button>
+    <button class="tab" onclick="switchTab('export',this)"><i class="ti ti-download"></i> 내보내기</button>
+  </div>
+
+  <!-- 장비 현황 -->
+  <div id="tab-inventory" class="section active">
+    <div class="card" id="inventory-content">
+      <div class="empty-state">불러오는 중...</div>
+    </div>
+  </div>
+
+  <!-- 예약하기 -->
+  <div id="tab-reserve" class="section">
+    <div class="card">
+      <div class="form-group"><label>신청자 이름 *</label><input type="text" id="res-name" placeholder="홍길동"></div>
+      <div class="form-group"><label>부서 *</label><input type="text" id="res-dept" placeholder="예: 심사1팀"></div>
+      <div class="form-group"><label>출장 목적 *</label><input type="text" id="res-purpose" placeholder="예: 2025 현장 심사"></div>
+      <div class="date-row">
+        <div class="form-group"><label>출장 시작일 *</label><input type="date" id="res-start"></div>
+        <div class="form-group"><label>출장 종료일 *</label><input type="date" id="res-end"></div>
+      </div>
+      <div class="form-group"><label>비고</label><textarea id="res-note" placeholder="특이사항이 있으면 입력하세요"></textarea></div>
+      <div class="section-label">장비 선택</div>
+      <div id="equip-selector"></div>
+      <div class="selected-summary" id="selected-summary"><span style="color:var(--color-text-secondary)">선택된 장비가 없습니다</span></div>
+      <div id="reserve-alert" style="display:none" class="alert"></div>
+      <button class="btn btn-primary btn-block" style="margin-top:14px" onclick="submitReservation()">
+        <i class="ti ti-calendar-plus"></i> 예약 신청
+      </button>
+    </div>
+  </div>
+
+  <!-- 예약 관리 -->
+  <div id="tab-manage" class="section">
+    <div class="filter-row">
+      <button class="filter-btn active" onclick="setFilter('all',this)">전체</button>
+      <button class="filter-btn" onclick="setFilter('reserved',this)">예약</button>
+      <button class="filter-btn" onclick="setFilter('issued',this)">불출</button>
+      <button class="filter-btn" onclick="setFilter('returned',this)">반납완료</button>
+    </div>
+    <div class="card" id="manage-list"><div class="empty-state">불러오는 중...</div></div>
+  </div>
+
+  <!-- 내보내기 -->
+  <div id="tab-export" class="section">
+    <div class="stat-grid" id="export-stats"></div>
+    <div class="export-info"><i class="ti ti-info-circle" style="margin-right:4px"></i>저장된 모든 예약 이력과 체크리스트를 CSV 파일로 다운로드합니다. 엑셀에서 바로 열 수 있습니다.</div>
+    <div class="export-card">
+      <div class="export-icon"><i class="ti ti-table" style="font-size:20px;color:var(--color-text-secondary)"></i></div>
+      <div style="flex:1">
+        <div class="export-title">전체 예약 이력</div>
+        <div class="export-desc">예약번호, 신청자, 부서, 출장 목적, 기간, 장비 목록, 상태, 불출/반납 일시 및 담당자</div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="exportReservations()"><i class="ti ti-download"></i> CSV 다운로드</button>
+      </div>
+    </div>
+    <div class="export-card">
+      <div class="export-icon"><i class="ti ti-checklist" style="font-size:20px;color:var(--color-text-secondary)"></i></div>
+      <div style="flex:1">
+        <div class="export-title">불출 체크리스트 이력</div>
+        <div class="export-desc">불출 처리된 예약의 체크리스트 9개 항목 완료 여부, 담당자 서명 포함</div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="exportIssueChecklist()"><i class="ti ti-download"></i> CSV 다운로드</button>
+      </div>
+    </div>
+    <div class="export-card">
+      <div class="export-icon"><i class="ti ti-clipboard-check" style="font-size:20px;color:var(--color-text-secondary)"></i></div>
+      <div style="flex:1">
+        <div class="export-title">반납 체크리스트 이력</div>
+        <div class="export-desc">반납 처리된 예약의 체크리스트 6개 항목 완료 여부, 확인자 서명, 특이사항 포함</div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="exportReturnChecklist()"><i class="ti ti-download"></i> CSV 다운로드</button>
+      </div>
+    </div>
+    <div class="export-card">
+      <div class="export-icon"><i class="ti ti-file-spreadsheet" style="font-size:20px;color:var(--color-text-secondary)"></i></div>
+      <div style="flex:1">
+        <div class="export-title">전체 통합 이력</div>
+        <div class="export-desc">예약 정보 + 불출 체크리스트 + 반납 체크리스트를 하나의 파일로 통합</div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="exportAll()"><i class="ti ti-download"></i> CSV 다운로드</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modal-container"></div>
+
+<script>
+// =============================================
+// 데이터 정의
+// =============================================
+const EQUIP_GROUPS = [
+  { id:'laptop-exam', name:'심사용 노트북', parts:'노트북, 충전기, 마우스, 마우스 패드', icon:'ti-device-laptop',
+    items: Array.from({length:25},(_,i)=>`심사용 노트북${String(i+1).padStart(2,'0')}`) },
+  { id:'laptop-hq',  name:'본부용 노트북', parts:'노트북, 충전기, 마우스, 마우스 패드', icon:'ti-device-laptop',
+    items: Array.from({length:4}, (_,i)=>`본부용노트북 ${String(i+1).padStart(2,'0')}`) },
+  { id:'monitor',    name:'심사용 모니터', parts:'모니터, 연결케이블, 충전기', icon:'ti-device-desktop',
+    items: Array.from({length:10},(_,i)=>`심사용 모니터 ${String(i+1).padStart(2,'0')}`) },
+  { id:'printer',    name:'흑백 프린터',   parts:'프린터, 연결케이블, 충전기', icon:'ti-printer',
+    items: Array.from({length:3}, (_,i)=>`프린터 ${String(i+1).padStart(2,'0')}`) },
+  { id:'kt-egg',     name:'KT 에그',       parts:'에그, 충전기', icon:'ti-wifi',
+    items:['KT에그'] }
+];
+
+const CHECKLIST_ISSUE = [
+  { group:'구성품 확인', items:['구성품 수량 일치 확인 (분실 항목 없음)'] },
+  { group:'장비 상태 확인', items:['장비 상태 일치 확인 (외관 이상 없음, 장비 정상 작동)'] },
+  { group:'파일 정리 확인', items:['바탕화면의 모든 파일 삭제되어 있음','탐색기 실행 후 다운로드, 문서, 사진, 음악, 동영상 폴더 내 모든 파일 삭제되어 있음','휴지통 비워져 있음'] },
+  { group:'라이센스 확인', items:['엑셀 계정이 할당된 라이센스 ID와 일치하는지 확인','엑셀 최근문서가 보이지 않는지 확인','한컴독스 계정이 할당된 라이센스 ID와 일치하는지 확인','한컴독스 최근문서가 보이지 않는지 확인'] }
+];
+const CHECKLIST_RETURN = [
+  { group:'파일 삭제', items:['바탕화면의 모든 파일 삭제','탐색기 실행 후 다운로드, 문서, 사진, 음악, 동영상 폴더 내 모든 파일 삭제','모든 파일 삭제 후 휴지통 비우기'] },
+  { group:'반납 확인', items:['불출 당시와 구성품 수량 일치 확인 (분실 항목 없음)','불출 당시와 장비 상태 일치 확인 (외관 이상 없음, 장비 정상 작동)','반납 기한 숙지'] }
+];
+const ISSUE_FLAT = CHECKLIST_ISSUE.flatMap(g=>g.items);
+const RETURN_FLAT = CHECKLIST_RETURN.flatMap(g=>g.items);
+
+// =============================================
+// 상태
+// =============================================
+let reservations = [];
+let currentFilter = 'all';
+let selectedItems = new Set();
+let firebaseConnected = false;
+
+// =============================================
+// Firebase 연동
+// =============================================
+document.addEventListener('firebase-ready', () => {
+  firebaseConnected = true;
+  document.getElementById('status-dot').className = 'status-dot-live';
+  document.getElementById('status-text').textContent = '실시간 연결됨 — 모든 직원이 같은 데이터를 공유합니다';
+
+  window.fbListen((data) => {
+    reservations = Array.isArray(data) ? data : Object.values(data || {});
+    renderInventory();
+    renderManage();
+    renderEquipSelector();
+    renderExportStats();
+  });
+});
+
+async function saveReservations() {
+  if (firebaseConnected) {
+    await window.fbSave(reservations);
+  }
+}
+
+// =============================================
+// 헬퍼
+// =============================================
+function getBusyItems(excludeId) {
+  const busy = new Set();
+  reservations
+    .filter(r => r.id !== excludeId && (r.status === 'reserved' || r.status === 'issued'))
+    .forEach(r => (r.items || []).forEach(i => busy.add(i)));
+  return busy;
+}
+
+function statusLabel(s) {
+  return s === 'reserved' ? '예약' : s === 'issued' ? '불출' : s === 'returned' ? '반납완료' : s;
+}
+
+function statusBadge(s) {
+  if (s==='reserved') return '<span class="badge badge-info"><i class="ti ti-calendar"></i> 예약</span>';
+  if (s==='issued')   return '<span class="badge badge-warning"><i class="ti ti-arrow-up-right"></i> 불출</span>';
+  if (s==='returned') return '<span class="badge badge-success"><i class="ti ti-check"></i> 반납완료</span>';
+  return '';
+}
+
+function fmtDate(iso) { return iso ? new Date(iso).toLocaleString('ko-KR') : ''; }
+
+function csvEscape(v) {
+  const s = String(v ?? '');
+  return (s.includes(',') || s.includes('"') || s.includes('\n')) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function downloadCSV(filename, rows) {
+  const csv = '\uFEFF' + rows.map(r => r.map(csvEscape).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+  a.download = filename;
+  a.click();
+}
+
+function today() { return new Date().toISOString().slice(0, 10); }
+
+// =============================================
+// 장비 현황
+// =============================================
+function renderInventory() {
+  const busy = getBusyItems();
+  const html = EQUIP_GROUPS.map(g => {
+    const avail = g.items.filter(i => !busy.has(i)).length;
+    const chips = g.items.map(item => {
+      const b = busy.has(item);
+      return `<div class="inv-chip ${b ? 'busy' : ''}">
+        <span class="dot ${b ? 'dot-busy' : 'dot-avail'}"></span>${item}
+      </div>`;
+    }).join('');
+    return `<div class="inv-group">
+      <div class="inv-group-title">
+        <i class="ti ${g.icon}" style="font-size:15px;color:var(--color-text-secondary)"></i>
+        ${g.name}
+        <span class="badge ${avail===0?'badge-danger':avail<=2?'badge-warning':'badge-success'}" style="font-size:11px">${avail}/${g.items.length} 이용 가능</span>
+      </div>
+      <div class="inv-group-parts"><i class="ti ti-puzzle" style="font-size:12px;margin-right:3px"></i>구성품: ${g.parts}</div>
+      <div class="inv-grid">${chips}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('inventory-content').innerHTML = html;
+}
+
+// =============================================
+// 예약하기
+// =============================================
+function renderEquipSelector() {
+  const busy = getBusyItems();
+  document.getElementById('equip-selector').innerHTML = EQUIP_GROUPS.map(g => {
+    const avail = g.items.filter(i => !busy.has(i)).length;
+    const items = g.items.map(item => {
+      const b = busy.has(item);
+      const lid = 'eq-' + item.replace(/[\s()]/g, '_');
+      return `<div class="equip-item">
+        <input type="checkbox" id="${lid}" ${selectedItems.has(item)?'checked':''} ${b?'disabled':''} onchange="toggleItem('${item}')">
+        <span class="dot ${b?'dot-busy':'dot-avail'}"></span>
+        <label class="equip-item-label" for="${lid}">
+          <span class="equip-item-name" style="${b?'color:var(--color-text-tertiary);text-decoration:line-through':''}">${item}${b?' (사용 중)':''}</span>
+          <span class="equip-item-sub">(${g.parts})</span>
+        </label>
+      </div>`;
+    }).join('');
+    return `<div class="equip-group">
+      <div class="equip-group-header" onclick="toggleGroup('grp-${g.id}','chev-${g.id}')">
+        <i class="ti ${g.icon}"></i>
+        <div class="equip-group-header-info">
+          <div class="equip-group-title">${g.name}</div>
+          <div class="equip-group-parts-text">(${g.parts})</div>
+        </div>
+        <span style="font-size:12px;color:var(--color-text-secondary)">${avail}/${g.items.length} 가용</span>
+        <i class="ti ti-chevron-down" id="chev-${g.id}" style="font-size:14px;color:var(--color-text-secondary);transition:transform 0.2s;margin-left:4px"></i>
+      </div>
+      <div class="equip-group-body" id="grp-${g.id}">${items}</div>
+    </div>`;
+  }).join('');
+  updateSelectedSummary();
+}
+
+function toggleGroup(bodyId, chevId) {
+  const body = document.getElementById(bodyId), chev = document.getElementById(chevId);
+  body.classList.toggle('open');
+  if (chev) chev.style.transform = body.classList.contains('open') ? 'rotate(180deg)' : '';
+}
+
+function toggleItem(item) {
+  selectedItems.has(item) ? selectedItems.delete(item) : selectedItems.add(item);
+  updateSelectedSummary();
+}
+
+function updateSelectedSummary() {
+  const el = document.getElementById('selected-summary');
+  if (!el) return;
+  if (selectedItems.size === 0) { el.innerHTML = '<span style="color:var(--color-text-secondary)">선택된 장비가 없습니다</span>'; return; }
+  el.innerHTML = [...selectedItems].map(item => {
+    const g = EQUIP_GROUPS.find(g => g.items.includes(item));
+    return `<span class="selected-tag"><i class="ti ti-check" style="font-size:11px;color:#3B6D11"></i>${item} <span style="color:var(--color-text-secondary);font-size:11px">(${g?.parts})</span></span>`;
+  }).join('');
+}
+
+async function submitReservation() {
+  const name = document.getElementById('res-name').value.trim();
+  const dept = document.getElementById('res-dept').value.trim();
+  const purpose = document.getElementById('res-purpose').value.trim();
+  const start = document.getElementById('res-start').value;
+  const end = document.getElementById('res-end').value;
+  const note = document.getElementById('res-note').value.trim();
+  const alertEl = document.getElementById('reserve-alert');
+
+  if (!name || !dept || !purpose || !start || !end) {
+    alertEl.className = 'alert alert-danger'; alertEl.textContent = '신청자 이름, 부서, 출장 목적, 날짜를 모두 입력해주세요.'; alertEl.style.display = 'block'; return;
+  }
+  if (selectedItems.size === 0) {
+    alertEl.className = 'alert alert-danger'; alertEl.textContent = '하나 이상의 장비를 선택해주세요.'; alertEl.style.display = 'block'; return;
+  }
+
+  const res = { id: Date.now().toString(), name, dept, purpose, start, end, note, items: [...selectedItems], status: 'reserved', createdAt: new Date().toISOString(), issuedAt: null, returnedAt: null, issueSign: '', returnSign: '', returnNote: '' };
+  reservations.push(res);
+  await saveReservations();
+
+  selectedItems.clear();
+  ['res-name','res-dept','res-purpose','res-note'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('res-start').value = today();
+  document.getElementById('res-end').value = today();
+  renderEquipSelector();
+
+  alertEl.className = 'alert alert-success';
+  alertEl.textContent = `예약 완료 (예약번호: ${res.id.slice(-6)}) · ${res.items.join(', ')}`;
+  alertEl.style.display = 'block';
+  setTimeout(() => { alertEl.style.display = 'none'; }, 5000);
+}
+
+// =============================================
+// 예약 관리
+// =============================================
+function renderManage() {
+  const el = document.getElementById('manage-list');
+  const filtered = currentFilter === 'all' ? reservations : reservations.filter(r => r.status === currentFilter);
+  const sorted = [...filtered].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  if (!sorted.length) { el.innerHTML = '<div class="empty-state"><i class="ti ti-clipboard-x" style="font-size:32px;display:block;margin-bottom:8px"></i>해당하는 예약이 없습니다</div>'; return; }
+  el.innerHTML = sorted.map(r => {
+    const actions = [];
+    if (r.status === 'reserved') { actions.push(`<button class="btn btn-sm btn-success" onclick="openIssueModal('${r.id}')">불출 처리</button>`); actions.push(`<button class="btn btn-sm btn-danger" onclick="cancelReservation('${r.id}')">취소</button>`); }
+    if (r.status === 'issued') actions.push(`<button class="btn btn-sm btn-secondary" onclick="openReturnModal('${r.id}')">반납 처리</button>`);
+    return `<div class="reservation-row">
+      <div class="res-info">
+        ${statusBadge(r.status)}
+        <div class="res-name" style="margin-top:5px">${r.name} · ${r.dept}</div>
+        <div class="res-meta">${r.purpose} · ${r.start} ~ ${r.end}</div>
+        <div class="res-meta" style="margin-top:2px">${(r.items || []).join(', ')}</div>
+        ${r.note ? `<div class="res-meta" style="color:var(--color-text-tertiary)">${r.note}</div>` : ''}
+      </div>
+      <div class="res-actions">${actions.join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderManage();
+}
+
+// =============================================
+// 체크리스트 모달
+// =============================================
+function buildChecklist(groups, prefix, total) {
+  let idx = 0;
+  return groups.map(g => `<div class="cl-group">
+    <div class="cl-group-title">${g.group}</div>
+    ${g.items.map(item => { const i = idx++; return `<div class="cl-item" id="cli-${prefix}-${i}"><input type="checkbox" id="${prefix}-${i}" onchange="onCheck('${prefix}',${total})"><label for="${prefix}-${i}">${item}</label></div>`; }).join('')}
+  </div>`).join('');
+}
+
+function onCheck(prefix, total) {
+  let count = 0;
+  for (let i = 0; i < total; i++) {
+    const cb = document.getElementById(`${prefix}-${i}`);
+    if (cb?.checked) { count++; document.getElementById(`cli-${prefix}-${i}`)?.classList.add('checked'); }
+    else document.getElementById(`cli-${prefix}-${i}`)?.classList.remove('checked');
+  }
+  const fill = document.getElementById(`pf-${prefix}`), text = document.getElementById(`pt-${prefix}`);
+  if (fill) fill.style.width = `${Math.round(count/total*100)}%`;
+  if (text) text.textContent = `${count}/${total} 항목 완료`;
+}
+
+function openIssueModal(id) {
+  const r = reservations.find(r => r.id === id), total = ISSUE_FLAT.length;
+  showModal(`<h2><i class="ti ti-arrow-up-right"></i>불출 처리</h2>
+    <div class="detail-box">
+      <div class="detail-row"><span class="detail-label">신청자</span><span class="detail-value">${r.name} (${r.dept})</span></div>
+      <div class="detail-row"><span class="detail-label">출장 목적</span><span class="detail-value">${r.purpose}</span></div>
+      <div class="detail-row"><span class="detail-label">기간</span><span class="detail-value">${r.start} ~ ${r.end}</span></div>
+      <div class="detail-row"><span class="detail-label">장비</span><span class="detail-value" style="text-align:right">${(r.items||[]).join(', ')}</span></div>
+    </div>
+    <div class="notice"><i class="ti ti-alert-triangle" style="margin-right:4px"></i>모든 항목을 직접 확인 후 체크해주세요. 미체크 항목이 있으면 불출 처리가 불가합니다.</div>
+    <div class="progress-wrap"><div class="progress-fill" id="pf-ic" style="width:0%"></div></div>
+    <div class="progress-text" id="pt-ic">0/${total} 항목 완료</div>
+    ${buildChecklist(CHECKLIST_ISSUE, 'ic', total)}
+    <div class="form-group" style="margin-top:14px"><label>불출 담당자 서명 (이름 입력) *</label><input type="text" id="issue-sign" placeholder="담당자 이름"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">취소</button>
+      <button class="btn btn-primary" style="flex:1" onclick="completeIssue('${id}',${total})">불출 완료 처리</button>
+    </div>`);
+}
+
+function openReturnModal(id) {
+  const r = reservations.find(r => r.id === id), total = RETURN_FLAT.length;
+  showModal(`<h2><i class="ti ti-arrow-back-up"></i>반납 처리</h2>
+    <div class="detail-box">
+      <div class="detail-row"><span class="detail-label">신청자</span><span class="detail-value">${r.name} (${r.dept})</span></div>
+      <div class="detail-row"><span class="detail-label">기간</span><span class="detail-value">${r.start} ~ ${r.end}</span></div>
+      <div class="detail-row"><span class="detail-label">불출일시</span><span class="detail-value">${fmtDate(r.issuedAt)}</span></div>
+      <div class="detail-row"><span class="detail-label">장비</span><span class="detail-value" style="text-align:right">${(r.items||[]).join(', ')}</span></div>
+    </div>
+    <div class="notice"><i class="ti ti-alert-triangle" style="margin-right:4px"></i>반납 전 모든 항목을 순서대로 완료 후 체크해주세요.</div>
+    <div class="progress-wrap"><div class="progress-fill" id="pf-rc" style="width:0%"></div></div>
+    <div class="progress-text" id="pt-rc">0/${total} 항목 완료</div>
+    ${buildChecklist(CHECKLIST_RETURN, 'rc', total)}
+    <div class="form-group" style="margin-top:14px"><label>반납 상태 특이사항</label><textarea id="return-note" placeholder="파손, 분실 등 특이사항 (없으면 비워두세요)"></textarea></div>
+    <div class="form-group"><label>반납 확인자 (담당자 이름) *</label><input type="text" id="return-sign" placeholder="담당자 이름"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">취소</button>
+      <button class="btn btn-primary" style="flex:1" onclick="completeReturn('${id}',${total})">반납 완료 처리</button>
+    </div>`);
+}
+
+async function completeIssue(id, total) {
+  for (let i = 0; i < total; i++) { if (!document.getElementById('ic-'+i)?.checked) { alert('모든 체크리스트 항목을 완료해주세요.'); return; } }
+  const sign = document.getElementById('issue-sign').value.trim();
+  if (!sign) { alert('불출 담당자 이름을 입력해주세요.'); return; }
+  const r = reservations.find(r => r.id === id);
+  r.status = 'issued'; r.issuedAt = new Date().toISOString(); r.issueSign = sign;
+  await saveReservations(); closeModal();
+}
+
+async function completeReturn(id, total) {
+  for (let i = 0; i < total; i++) { if (!document.getElementById('rc-'+i)?.checked) { alert('모든 체크리스트 항목을 완료해주세요.'); return; } }
+  const sign = document.getElementById('return-sign').value.trim();
+  if (!sign) { alert('반납 확인자 이름을 입력해주세요.'); return; }
+  const r = reservations.find(r => r.id === id);
+  r.status = 'returned'; r.returnedAt = new Date().toISOString(); r.returnSign = sign;
+  r.returnNote = document.getElementById('return-note').value.trim();
+  await saveReservations(); closeModal();
+}
+
+async function cancelReservation(id) {
+  if (!confirm('예약을 취소하시겠습니까?')) return;
+  reservations = reservations.filter(r => r.id !== id);
+  await saveReservations();
+}
+
+// =============================================
+// 내보내기
+// =============================================
+function renderExportStats() {
+  const el = document.getElementById('export-stats');
+  if (!el) return;
+  const total = reservations.length, reserved = reservations.filter(r=>r.status==='reserved').length, issued = reservations.filter(r=>r.status==='issued').length, returned = reservations.filter(r=>r.status==='returned').length;
+  el.innerHTML = [['전체 예약',total],['예약',reserved],['불출',issued],['반납완료',returned]].map(([l,n])=>`<div class="stat-chip"><div class="stat-num">${n}</div><div class="stat-label">${l}</div></div>`).join('');
+}
+
+function exportReservations() {
+  if (!reservations.length) { alert('내보낼 이력이 없습니다.'); return; }
+  downloadCSV(`예약이력_${today()}.csv`, [['예약번호','신청자','부서','출장목적','시작일','종료일','장비목록','상태','예약일시','불출일시','불출담당자','반납일시','반납확인자','반납특이사항','비고'], ...reservations.map(r=>[r.id.slice(-6),r.name,r.dept,r.purpose,r.start,r.end,(r.items||[]).join(' / '),statusLabel(r.status),fmtDate(r.createdAt),fmtDate(r.issuedAt),r.issueSign||'',fmtDate(r.returnedAt),r.returnSign||'',r.returnNote||'',r.note||''])]);
+}
+function exportIssueChecklist() {
+  const d = reservations.filter(r=>r.status==='issued'||r.status==='returned');
+  if (!d.length) { alert('불출 처리된 이력이 없습니다.'); return; }
+  downloadCSV(`불출체크리스트_${today()}.csv`, [['예약번호','신청자','부서','출장목적','불출일시','불출담당자',...ISSUE_FLAT], ...d.map(r=>[r.id.slice(-6),r.name,r.dept,r.purpose,fmtDate(r.issuedAt),r.issueSign||'',...ISSUE_FLAT.map(()=>'완료')])]);
+}
+function exportReturnChecklist() {
+  const d = reservations.filter(r=>r.status==='returned');
+  if (!d.length) { alert('반납 완료된 이력이 없습니다.'); return; }
+  downloadCSV(`반납체크리스트_${today()}.csv`, [['예약번호','신청자','부서','출장목적','반납일시','반납확인자','특이사항',...RETURN_FLAT], ...d.map(r=>[r.id.slice(-6),r.name,r.dept,r.purpose,fmtDate(r.returnedAt),r.returnSign||'',r.returnNote||'',...RETURN_FLAT.map(()=>'완료')])]);
+}
+function exportAll() {
+  if (!reservations.length) { alert('내보낼 이력이 없습니다.'); return; }
+  downloadCSV(`장비이력_통합_${today()}.csv`, [['예약번호','신청자','부서','출장목적','시작일','종료일','장비목록','상태','예약일시','불출일시','불출담당자','반납일시','반납확인자','반납특이사항','비고',...ISSUE_FLAT.map((_,i)=>`불출_${i+1}`),...RETURN_FLAT.map((_,i)=>`반납_${i+1}`)], ...reservations.map(r=>{const hi=r.status==='issued'||r.status==='returned',hr=r.status==='returned';return[r.id.slice(-6),r.name,r.dept,r.purpose,r.start,r.end,(r.items||[]).join(' / '),statusLabel(r.status),fmtDate(r.createdAt),fmtDate(r.issuedAt),r.issueSign||'',fmtDate(r.returnedAt),r.returnSign||'',r.returnNote||'',r.note||'',...ISSUE_FLAT.map(()=>hi?'완료':'-'),...RETURN_FLAT.map(()=>hr?'완료':'-')]})]);
+}
+
+// =============================================
+// 모달
+// =============================================
+function showModal(html) { document.getElementById('modal-container').innerHTML = `<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">${html}</div></div>`; }
+function closeModal() { document.getElementById('modal-container').innerHTML = ''; }
+
+// =============================================
+// 탭 전환
+// =============================================
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('active');
+  if (tab === 'export') renderExportStats();
+}
+
+// =============================================
+// 초기화
+// =============================================
+document.getElementById('res-start').value = today();
+document.getElementById('res-end').value = today();
+renderInventory();
+renderEquipSelector();
+</script>
+</body>
+</html>
