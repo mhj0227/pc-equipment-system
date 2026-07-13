@@ -98,6 +98,7 @@
     .dot-avail    { background: #639922; }
     .dot-busy     { background: #E24B4A; }
     .dot-reserved { background: #EF9F27; }
+    .inv-chip.busy-soft { background: var(--bg); color: var(--text2); border-color: #EF9F27; }
 
     .alert { padding: 10px 12px; border-radius: var(--r-md); font-size: 13px; margin-bottom: 12px; }
     .alert-ok  { background: #EAF3DE; color: #3B6D11; border: 0.5px solid #C0DD97; }
@@ -267,6 +268,11 @@
 
   <!-- 장비 현황 -->
   <div id="tab-inventory" class="section active">
+    <div style="display:flex;gap:14px;margin-bottom:10px;flex-wrap:wrap">
+      <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2)"><span class="dot dot-avail" style="width:10px;height:10px"></span>이용 가능</span>
+      <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2)"><span class="dot dot-reserved" style="width:10px;height:10px"></span>예약됨 (이용 가능)</span>
+      <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2)"><span class="dot dot-busy" style="width:10px;height:10px"></span>불출 중 (사용 불가)</span>
+    </div>
     <div class="card" id="inventory-content"><div class="empty">불러오는 중...</div></div>
   </div>
 
@@ -417,14 +423,17 @@ function busy(excl,checkStart,checkEnd){
 
 /* ── 장비 현황 ── */
 function renderInventory(){
+  // 불출 중인 장비만 사용 불가 처리 / 예약 상태는 이용 가능으로 집계
   const bIssued=new Set(RES.filter(r=>r.status==='issued').flatMap(r=>r.items||[]));
   const bReserved=new Set(RES.filter(r=>r.status==='reserved').flatMap(r=>r.items||[]));
   document.getElementById('inventory-content').innerHTML=EQUIP_GROUPS.map(g=>{
-    const av=g.items.filter(i=>!bIssued.has(i)&&!bReserved.has(i)).length;
+    // 이용 가능 = 불출 중이 아닌 장비 (예약됨 포함)
+    const av=g.items.filter(i=>!bIssued.has(i)).length;
     return`<div class="inv-group"><div class="inv-title"><i class="ti ${g.icon}" style="font-size:15px;color:var(--text2)"></i>${g.name}<span class="badge ${av===0?'b-err':av<=2?'b-warn':'b-ok'}">${av}/${g.items.length} 이용 가능</span></div><div class="inv-parts"><i class="ti ti-puzzle" style="font-size:12px;margin-right:3px"></i>구성품: ${g.parts}</div><div class="inv-grid">${g.items.map(item=>{
-      const issued=bIssued.has(item), reserved=bReserved.has(item);
+      const issued=bIssued.has(item), reserved=bReserved.has(item)&&!issued;
+      // 불출 중: 빨간점 / 예약됨(미불출): 주황점 / 이용가능: 초록점
       const dotColor=issued?'dot-busy':reserved?'dot-reserved':'dot-avail';
-      const chipClass=issued||reserved?'busy':'';
+      const chipClass=issued?'busy':reserved?'busy-soft':'';
       const label=issued?' (불출 중)':reserved?' (예약됨)':'';
       return`<div class="inv-chip ${chipClass}"><span class="dot ${dotColor}"></span>${item}${label}</div>`;
     }).join('')}</div></div>`;
