@@ -95,8 +95,9 @@
     .b-gray{ background: var(--bg2); color: var(--text2); }
 
     .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .dot-avail { background: #639922; }
-    .dot-busy  { background: #E24B4A; }
+    .dot-avail    { background: #639922; }
+    .dot-busy     { background: #E24B4A; }
+    .dot-reserved { background: #EF9F27; }
 
     .alert { padding: 10px 12px; border-radius: var(--r-md); font-size: 13px; margin-bottom: 12px; }
     .alert-ok  { background: #EAF3DE; color: #3B6D11; border: 0.5px solid #C0DD97; }
@@ -234,8 +235,8 @@
       <div class="form-group"><label>과업명 *</label><input type="text" id="res-dept" placeholder="예: 2025 현장 심사"></div>
       <div class="form-group"><label>사용 목적 *</label><input type="text" id="res-purpose" placeholder="예: 심사위원 채점용"></div>
       <div class="date-row">
-        <div class="form-group"><label>불출 예정일 *</label><input type="date" id="res-start"></div>
-        <div class="form-group"><label>반납 예정일 *</label><input type="date" id="res-end"></div>
+        <div class="form-group"><label>불출 예정일 *</label><input type="date" id="res-start" onchange="renderEquipSelector()"></div>
+        <div class="form-group"><label>반납 예정일 *</label><input type="date" id="res-end" onchange="renderEquipSelector()"></div>
       </div>
       <div class="form-group"><label>비고</label><textarea id="res-note" placeholder="특이사항이 있으면 입력하세요"></textarea></div>
       <div class="sec-label">장비 선택</div>
@@ -327,20 +328,38 @@ document.addEventListener('firebase-ready',()=>{
 
 async function save(){ if(window.firebaseReady) await window.fbSave(RES); }
 
-function busy(excl){const s=new Set();RES.filter(r=>r.id!==excl&&(r.status==='reserved'||r.status==='issued')).forEach(r=>(r.items||[]).forEach(i=>s.add(i)));return s;}
+function datesOverlap(s1,e1,s2,e2){return s1<=e2&&s2<=e1;}
+function busy(excl,checkStart,checkEnd){
+  return new Set(RES.filter(r=>{
+    if(r.id===excl)return false;
+    if(r.status==='issued')return true;
+    if(r.status!=='reserved')return false;
+    if(checkStart&&checkEnd&&r.start&&r.end){return datesOverlap(checkStart,checkEnd,r.start,r.end);}
+    return true;
+  }).flatMap(r=>r.items||[]));
+}
 
 /* ── 장비 현황 ── */
 function renderInventory(){
-  const b=busy();
+  const bIssued=new Set(RES.filter(r=>r.status==='issued').flatMap(r=>r.items||[]));
+  const bReserved=new Set(RES.filter(r=>r.status==='reserved').flatMap(r=>r.items||[]));
   document.getElementById('inventory-content').innerHTML=EQUIP_GROUPS.map(g=>{
-    const av=g.items.filter(i=>!b.has(i)).length;
-    return`<div class="inv-group"><div class="inv-title"><i class="ti ${g.icon}" style="font-size:15px;color:var(--text2)"></i>${g.name}<span class="badge ${av===0?'b-err':av<=2?'b-warn':'b-ok'}">${av}/${g.items.length} 이용 가능</span></div><div class="inv-parts"><i class="ti ti-puzzle" style="font-size:12px;margin-right:3px"></i>구성품: ${g.parts}</div><div class="inv-grid">${g.items.map(item=>{const bb=b.has(item);return`<div class="inv-chip ${bb?'busy':''}"><span class="dot ${bb?'dot-busy':'dot-avail'}"></span>${item}</div>`;}).join('')}</div></div>`;
+    const av=g.items.filter(i=>!bIssued.has(i)&&!bReserved.has(i)).length;
+    return`<div class="inv-group"><div class="inv-title"><i class="ti ${g.icon}" style="font-size:15px;color:var(--text2)"></i>${g.name}<span class="badge ${av===0?'b-err':av<=2?'b-warn':'b-ok'}">${av}/${g.items.length} 이용 가능</span></div><div class="inv-parts"><i class="ti ti-puzzle" style="font-size:12px;margin-right:3px"></i>구성품: ${g.parts}</div><div class="inv-grid">${g.items.map(item=>{
+      const issued=bIssued.has(item), reserved=bReserved.has(item);
+      const dotColor=issued?'dot-busy':reserved?'dot-reserved':'dot-avail';
+      const chipClass=issued||reserved?'busy':'';
+      const label=issued?' (불출 중)':reserved?' (예약됨)':'';
+      return`<div class="inv-chip ${chipClass}"><span class="dot ${dotColor}"></span>${item}${label}</div>`;
+    }).join('')}</div></div>`;
   }).join('');
 }
 
 /* ── 예약하기 ── */
 function renderEquipSelector(){
-  const b=busy();
+  const cs=document.getElementById('res-start')?.value||null;
+  const ce=document.getElementById('res-end')?.value||null;
+  const b=busy(null,cs,ce);
   document.getElementById('equip-selector').innerHTML=EQUIP_GROUPS.map(g=>{
     const av=g.items.filter(i=>!b.has(i)).length;
     return`<div class="eg"><div class="eg-header" onclick="tg('grp-${g.id}','chev-${g.id}')"><i class="ti ${g.icon}"></i><div class="eg-info"><div class="eg-title">${g.name}</div><div class="eg-parts">(${g.parts})</div></div><span style="font-size:12px;color:var(--text2);margin-right:4px">${av}/${g.items.length} 가용</span><i class="ti ti-chevron-down" id="chev-${g.id}" style="font-size:14px;color:var(--text2);transition:transform 0.2s"></i></div><div class="eg-body" id="grp-${g.id}">${g.items.map(item=>{const bb=b.has(item),lid='eq-'+item.replace(/[\s()]/g,'_');return`<div class="ei"><input type="checkbox" id="${lid}" ${selItems.has(item)?'checked':''} ${bb?'disabled':''} onchange="ti('${item}')"><span class="dot ${bb?'dot-busy':'dot-avail'}"></span><label class="ei-label" for="${lid}"><span class="ei-name" style="${bb?'color:var(--text2);text-decoration:line-through':''}">${item}${bb?' (사용 중)':''}</span><span class="ei-sub">(${g.parts})</span></label></div>`;}).join('')}</div></div>`;
@@ -356,6 +375,15 @@ async function submitReservation(){
   const al=document.getElementById('reserve-alert');
   if(!n||!d||!p||!s||!e){al.className='alert alert-err';al.textContent='신청자 이름, 과업명, 사용 목적, 날짜를 모두 입력해주세요.';al.style.display='block';return;}
   if(!selItems.size){al.className='alert alert-err';al.textContent='하나 이상의 장비를 선택해주세요.';al.style.display='block';return;}
+  // 날짜 기반 중복 체크
+  const conflictItems=[];
+  const bCheck=busy(null,s,e);
+  selItems.forEach(item=>{ if(bCheck.has(item)) conflictItems.push(item); });
+  if(conflictItems.length>0){
+    al.className='alert alert-err';
+    al.textContent='선택한 기간에 이미 예약된 장비가 있습니다: '+conflictItems.join(', ');
+    al.style.display='block'; return;
+  }
   const res={id:Date.now().toString(),name:n,dept:d,purpose:p,start:s,end:e,note:nt,items:[...selItems],status:'reserved',createdAt:new Date().toISOString(),issuedAt:null,returnedAt:null,issueSign:'',issueNote:'',returnSign:'',returnNote:''};
   RES.push(res);await save();
   selItems.clear();['res-name','res-dept','res-purpose','res-note'].forEach(id=>document.getElementById(id).value='');
